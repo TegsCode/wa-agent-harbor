@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ApiPublicInstallDotps1RouteImport } from './routes/api/public/install[.]ps1'
 import { Route as ApiPublicInstallDotshRouteImport } from './routes/api/public/install[.]sh'
 import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
@@ -18,6 +19,11 @@ import { Route as ApiPublicAgentToolRouteImport } from './routes/api/public/agen
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicInstallDotps1Route = ApiPublicInstallDotps1RouteImport.update({
@@ -43,6 +49,7 @@ const ApiPublicAgentToolRoute = ApiPublicAgentToolRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
   '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
   '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
   '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
   '/api/public/mcp': typeof ApiPublicMcpRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/api/public/install.ps1'
     | '/api/public/install.sh'
     | '/api/public/mcp'
@@ -74,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/auth'
     | '/api/public/install.ps1'
     | '/api/public/install.sh'
     | '/api/public/mcp'
@@ -81,6 +92,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/auth'
     | '/api/public/install.ps1'
     | '/api/public/install.sh'
     | '/api/public/mcp'
@@ -89,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
   ApiPublicInstallDotps1Route: typeof ApiPublicInstallDotps1Route
   ApiPublicInstallDotshRoute: typeof ApiPublicInstallDotshRoute
   ApiPublicMcpRoute: typeof ApiPublicMcpRoute
@@ -102,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/install.ps1': {
@@ -137,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
   ApiPublicInstallDotps1Route: ApiPublicInstallDotps1Route,
   ApiPublicInstallDotshRoute: ApiPublicInstallDotshRoute,
   ApiPublicMcpRoute: ApiPublicMcpRoute,
