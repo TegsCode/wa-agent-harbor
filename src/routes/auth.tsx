@@ -22,16 +22,22 @@ export const Route = createFileRoute("/auth")({
 });
 
 function friendly(msg: string) {
-  if (/database error|not been invited/i.test(msg))
-    return "This email hasn't been invited yet. Ask a team admin to invite you.";
+  if (/database error|not been invited|not been invited yet/i.test(msg))
+    return "This email isn't invited. Ask the admin for an invite — or enter the admin password above if you're the admin.";
   return msg;
 }
+
+// In-house admin gate: signup always asks for this code. Returning admins type it
+// to create their account (DB trigger also checks it); everyone else must be invited
+// via Settings → Team. Override via VITE_ADMIN_SIGNUP_PASSWORD in .env if desired.
+const ADMIN_SIGNUP_PASSWORD = (import.meta.env.VITE_ADMIN_SIGNUP_PASSWORD as string | undefined) ?? "tegs.wah.password";
 
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState(DEMO_MODE ? "demo@wa-agent-hub.app" : "");
   const [password, setPassword] = useState(DEMO_MODE ? "demo1234" : "");
+  const [adminPassword, setAdminPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -53,10 +59,16 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
+        // Admin gate: only the admin password creates an admin account.
+        // Everyone else must have been invited by an admin (team_invites) first.
+        const isAdmin = adminPassword === ADMIN_SIGNUP_PASSWORD;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { admin_code: isAdmin ? adminPassword : "" },
+          },
         });
         if (error) throw error;
         if (!data.session) setSent(true);
@@ -102,7 +114,7 @@ function AuthPage() {
             <p className="text-sm text-muted-foreground">
               {mode === "signin"
                 ? "Sign in to your team workspace."
-                : "The first person to sign up becomes admin. Others need an invite."}
+                : "In-house signup: admins enter the admin password to create their account. Everyone else asks an admin for an invite."}
             </p>
           </div>
           {DEMO_MODE && (
@@ -133,6 +145,21 @@ function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+              {mode === "signup" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="adminPassword">Admin password</Label>
+                  <Input
+                    id="adminPassword"
+                    type="password"
+                    placeholder="Only needed if you're the admin — otherwise ask admin for an invite"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Not the admin? Leave this blank and ask the admin to invite your email (Settings → Team).
+                  </p>
+                </div>
+              )}
               <Button className="w-full" disabled={busy}>
                 {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Sign up"}
               </Button>
