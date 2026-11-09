@@ -119,9 +119,9 @@ function AuthPage() {
           </div>
           {DEMO_MODE && (
             <div className="rounded-lg border border-primary/30 bg-accent p-3 text-xs leading-relaxed">
-              <b>Static demo.</b> Any email plus a password of 6+ characters signs you in — the fields are
-              pre-filled. Accounts, chats, keys and settings are stored in this browser only; no server, no
-              WhatsApp connection.
+              <b>Static demo login.</b> Any email plus a password of 6+ characters signs you in — the fields are
+              pre-filled. This login is stored in your browser only (no Supabase account needed). Connect your WAHA
+              bridge under <b>Settings → Bridge</b> to pair a real WhatsApp number from this Pages build.
             </div>
           )}
           {sent ? (
