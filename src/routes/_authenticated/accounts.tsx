@@ -120,6 +120,7 @@ function QrDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const [loading, setLoading] = useState(true);
   const [fetchedAt, setFetchedAt] = useState(0);
 
+  const isStarting = /starting up/i.test(err);
   useEffect(() => {
     let stop = false;
     const tick = async () => {
@@ -136,8 +137,8 @@ function QrDialog({ id, onClose }: { id: string; onClose: () => void }) {
     };
     tick();
     // WhatsApp pairing codes expire in ~20s, so refetch well inside that window.
-    // In demo mode there is no live code — poll status only.
-    const t = setInterval(tick, isDemo ? 5000 : 10000);
+    // Poll faster while WAHA is still STARTING so the QR appears as soon as it's ready.
+    const t = setInterval(tick, isDemo ? 5000 : 3000);
     return () => { stop = true; clearInterval(t); };
   }, [id, isDemo]);
 
@@ -177,11 +178,15 @@ function QrDialog({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <p className="text-sm text-muted-foreground">On your phone: WhatsApp → Settings → Linked Devices → Link a device.</p>
             <div className="grid place-items-center rounded-xl bg-bubble-in p-6">
-              {code?.kind === "image" ? <img src={code.value} alt="WhatsApp QR code" className="size-64" /> : <div className="size-64 animate-pulse rounded-lg bg-muted" />}
+              {code?.kind === "image" ? <img src={code.value} alt="WhatsApp QR code" className="size-64" /> : <div className="grid size-64 place-items-center rounded-lg bg-muted text-center"><p className="max-w-[220px] text-xs text-muted-foreground">{isStarting ? "Starting WhatsApp session…" : "Loading QR code…"}</p></div>}
             </div>
-            {err && <p className="text-sm text-destructive">{err}</p>}
+            {err && !isStarting && <p className="text-sm text-destructive">{err}</p>}
             <p className="text-center text-xs text-muted-foreground">
-              {loading ? "Fetching QR code…" : `Waiting for scan… refreshes automatically (last updated ${new Date(fetchedAt).toLocaleTimeString()}).`}
+              {isStarting
+                ? "WhatsApp is starting up for the first time — this can take 10–30s. The QR will appear automatically."
+                : loading
+                  ? "Fetching QR code…"
+                  : `Waiting for scan… refreshes automatically (last updated ${new Date(fetchedAt).toLocaleTimeString()}).`}
             </p>
             <p className="text-center text-xs text-muted-foreground">QR expires in about 20 seconds — scan promptly, never use an old screenshot.</p>
           </>

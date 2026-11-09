@@ -57,15 +57,26 @@ export const getQr = createServerFn({ method: "POST" })
       // QR (a fake payload like `2@demo-…` is always rejected by WhatsApp as invalid).
       return { kind: "demo" as const, value: "" };
     }
-    const qr = (await bridgeFetch(bridge, `/api/${acc.instance_name}/auth/qr?format=image`)) as {
-      mimetype?: string;
-      data?: string;
-      qrcode?: string;
-      qr?: string;
-    };
+    let qr: { mimetype?: string; data?: string; qrcode?: string; qr?: string };
+    try {
+      qr = (await bridgeFetch(bridge, `/api/${acc.instance_name}/auth/qr?format=image`)) as {
+        mimetype?: string;
+        data?: string;
+        qrcode?: string;
+        qr?: string;
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // WAHA replies 422 "Session status is not as expected … STARTING, expected [SCAN_QR_CODE]"
+      // while the session is still booting. That is not a user error — ask to retry.
+      if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
+        throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+      }
+      throw e;
+    }
     // WAHA returns {mimetype, data} on newer versions, {qrcode: "data:…"} on older ones.
     const raw = qr?.qrcode ?? qr?.qr ?? qr?.data;
-    if (!raw) throw new Error("QR not available yet — try again in a moment");
+    if (!raw) throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
     const value = raw.startsWith("data:") ? raw : `data:${qr?.mimetype ?? "image/png"};base64,${raw}`;
     return { kind: "image" as const, value };
   });

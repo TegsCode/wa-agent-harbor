@@ -96,14 +96,25 @@ export async function getQr({ data }: Args<{ id: string }>) {
   const account = loadAccount(data.id);
   const bridge = getBridge();
   if (useBridge(account, bridge)) {
-    const qr = (await bridgeFetch(bridge, `/api/${account.instance_name}/auth/qr?format=image`)) as {
-      mimetype?: string;
-      data?: string;
-      qrcode?: string;
-      qr?: string;
-    };
+    let qr: { mimetype?: string; data?: string; qrcode?: string; qr?: string };
+    try {
+      qr = (await bridgeFetch(bridge, `/api/${account.instance_name}/auth/qr?format=image`)) as {
+        mimetype?: string;
+        data?: string;
+        qrcode?: string;
+        qr?: string;
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // WAHA replies 422 "Session status is not as expected … STARTING, expected [SCAN_QR_CODE]"
+      // while the session is still booting. That is not a user error — ask to retry.
+      if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
+        throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+      }
+      throw e;
+    }
     const raw = (qr?.qrcode ?? qr?.qr ?? qr?.data) as string | undefined;
-    if (!raw) throw new Error("QR not available yet — try again in a moment");
+    if (!raw) throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
     return { kind: "image" as const, value: raw.startsWith("data:") ? raw : `data:${qr?.mimetype ?? "image/png"};base64,${raw}` };
   }
   // No live WAHA session exists, so there is no real WhatsApp pairing code to show.
