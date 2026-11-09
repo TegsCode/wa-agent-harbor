@@ -14,16 +14,327 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agent_keys: {
+        Row: {
+          account_ids: string[]
+          actions: string[]
+          allowed_chats: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          revoked_at: string | null
+        }
+        Insert: {
+          account_ids?: string[]
+          actions?: string[]
+          allowed_chats?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          revoked_at?: string | null
+        }
+        Update: {
+          account_ids?: string[]
+          actions?: string[]
+          allowed_chats?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
+      agent_requests: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          key_id: string | null
+          ok: boolean
+          tool: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          key_id?: string | null
+          ok: boolean
+          tool: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          key_id?: string | null
+          ok?: boolean
+          tool?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_requests_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "agent_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_settings: {
+        Row: {
+          bridge_api_key: string | null
+          bridge_url: string | null
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          bridge_api_key?: string | null
+          bridge_url?: string | null
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          bridge_api_key?: string | null
+          bridge_url?: string | null
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contacts: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          name: string | null
+          notes: string | null
+          phone: string
+          tags: string[]
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          notes?: string | null
+          phone: string
+          tags?: string[]
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          notes?: string | null
+          phone?: string
+          tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "wa_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_invites: {
+        Row: {
+          created_at: string
+          email: string
+          invited_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          invited_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          invited_by?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wa_accounts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          instance_name: string
+          is_demo: boolean
+          label: string
+          phone_number: string | null
+          profile_picture_url: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_name: string
+          is_demo?: boolean
+          label: string
+          phone_number?: string | null
+          profile_picture_url?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_name?: string
+          is_demo?: boolean
+          label?: string
+          phone_number?: string | null
+          profile_picture_url?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      wa_groups: {
+        Row: {
+          account_id: string
+          created_at: string
+          description: string | null
+          id: string
+          jid: string
+          name: string
+          participants: Json
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          jid: string
+          name: string
+          participants?: Json
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          jid?: string
+          name?: string
+          participants?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_groups_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "wa_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_messages: {
+        Row: {
+          account_id: string
+          author: string | null
+          body: string
+          chat_id: string
+          chat_name: string | null
+          created_at: string
+          from_me: boolean
+          id: string
+          is_group: boolean
+          is_read: boolean
+          sent_by_agent: string | null
+          status: string
+        }
+        Insert: {
+          account_id: string
+          author?: string | null
+          body: string
+          chat_id: string
+          chat_name?: string | null
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          is_group?: boolean
+          is_read?: boolean
+          sent_by_agent?: string | null
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          author?: string | null
+          body?: string
+          chat_id?: string
+          chat_name?: string | null
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          is_group?: boolean
+          is_read?: boolean
+          sent_by_agent?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "wa_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_team_member: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +461,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "member"],
+    },
   },
 } as const
