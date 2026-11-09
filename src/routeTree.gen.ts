@@ -10,33 +10,89 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicInstallDotps1RouteImport } from './routes/api/public/install[.]ps1'
+import { Route as ApiPublicInstallDotshRouteImport } from './routes/api/public/install[.]sh'
+import { Route as ApiPublicMcpRouteImport } from './routes/api/public/mcp'
+import { Route as ApiPublicAgentToolRouteImport } from './routes/api/public/agent.$tool'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicInstallDotps1Route = ApiPublicInstallDotps1RouteImport.update({
+  id: '/api/public/install.ps1',
+  path: '/api/public/install.ps1',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicInstallDotshRoute = ApiPublicInstallDotshRouteImport.update({
+  id: '/api/public/install.sh',
+  path: '/api/public/install.sh',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicMcpRoute = ApiPublicMcpRouteImport.update({
+  id: '/api/public/mcp',
+  path: '/api/public/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicAgentToolRoute = ApiPublicAgentToolRouteImport.update({
+  id: '/api/public/agent/$tool',
+  path: '/api/public/agent/$tool',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
+  '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
+  '/api/public/agent/$tool': typeof ApiPublicAgentToolRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
+  '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
+  '/api/public/agent/$tool': typeof ApiPublicAgentToolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/install.ps1': typeof ApiPublicInstallDotps1Route
+  '/api/public/install.sh': typeof ApiPublicInstallDotshRoute
+  '/api/public/mcp': typeof ApiPublicMcpRoute
+  '/api/public/agent/$tool': typeof ApiPublicAgentToolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/api/public/install.ps1'
+    | '/api/public/install.sh'
+    | '/api/public/mcp'
+    | '/api/public/agent/$tool'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/api/public/install.ps1'
+    | '/api/public/install.sh'
+    | '/api/public/mcp'
+    | '/api/public/agent/$tool'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/install.ps1'
+    | '/api/public/install.sh'
+    | '/api/public/mcp'
+    | '/api/public/agent/$tool'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicInstallDotps1Route: typeof ApiPublicInstallDotps1Route
+  ApiPublicInstallDotshRoute: typeof ApiPublicInstallDotshRoute
+  ApiPublicMcpRoute: typeof ApiPublicMcpRoute
+  ApiPublicAgentToolRoute: typeof ApiPublicAgentToolRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +104,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/install.ps1': {
+      id: '/api/public/install.ps1'
+      path: '/api/public/install.ps1'
+      fullPath: '/api/public/install.ps1'
+      preLoaderRoute: typeof ApiPublicInstallDotps1RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/install.sh': {
+      id: '/api/public/install.sh'
+      path: '/api/public/install.sh'
+      fullPath: '/api/public/install.sh'
+      preLoaderRoute: typeof ApiPublicInstallDotshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mcp': {
+      id: '/api/public/mcp'
+      path: '/api/public/mcp'
+      fullPath: '/api/public/mcp'
+      preLoaderRoute: typeof ApiPublicMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/agent/$tool': {
+      id: '/api/public/agent/$tool'
+      path: '/api/public/agent/$tool'
+      fullPath: '/api/public/agent/$tool'
+      preLoaderRoute: typeof ApiPublicAgentToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicInstallDotps1Route: ApiPublicInstallDotps1Route,
+  ApiPublicInstallDotshRoute: ApiPublicInstallDotshRoute,
+  ApiPublicMcpRoute: ApiPublicMcpRoute,
+  ApiPublicAgentToolRoute: ApiPublicAgentToolRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
