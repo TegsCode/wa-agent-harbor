@@ -9,35 +9,28 @@ import { DEMO_MODE } from "@/lib/demo-mode";
 export function SetupInstructions() {
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
+  // The installers are served as static files (public/install.*) so this one-liner
+  // works on GitHub Pages too. On Pages the base path is /wa-agent-harbor.
+  const base = DEMO_MODE ? "/wa-agent-harbor" : "";
+  const isWin = typeof navigator !== "undefined" && /win/i.test(navigator.platform || navigator.userAgent);
   return (
     <div className="space-y-6">
       <Step n={1} title="Run the bridge on this computer">
         <p className="mb-3 text-sm text-muted-foreground">
           Requires Docker. Starts WAHA (WhatsApp bridge) plus a Cloudflare Tunnel that gives it a public HTTPS URL.
+          Open a terminal and paste the one-liner for your OS.
         </p>
-        <Tabs defaultValue={DEMO_MODE ? "compose" : "unix"}>
+        <Tabs defaultValue={isWin ? "win" : "unix"}>
           <TabsList>
             <TabsTrigger value="unix">macOS / Linux</TabsTrigger>
             <TabsTrigger value="win">Windows</TabsTrigger>
             <TabsTrigger value="compose">Docker Compose</TabsTrigger>
           </TabsList>
           <TabsContent value="unix">
-            {DEMO_MODE && (
-              <p className="mb-2 text-xs text-muted-foreground">
-                The one-line installer is served by the app server, so it isn't available on this static demo — use the
-                Docker Compose tab instead, or run the same commands from a self-hosted deployment.
-              </p>
-            )}
-            <CopyBlock code={`curl -fsSL ${origin}/api/public/install.sh | bash`} />
+            <CopyBlock code={`curl -fsSL ${origin}${base}/install.sh | bash`} />
           </TabsContent>
           <TabsContent value="win">
-            {DEMO_MODE && (
-              <p className="mb-2 text-xs text-muted-foreground">
-                The one-line installer is served by the app server, so it isn't available on this static demo — use the
-                Docker Compose tab instead, or run the same command from a self-hosted deployment.
-              </p>
-            )}
-            <CopyBlock code={`irm ${origin}/api/public/install.ps1 | iex`} />
+            <CopyBlock code={`irm ${origin}${base}/install.ps1 | iex`} />
           </TabsContent>
           <TabsContent value="compose">
             <p className="mb-2 text-xs text-muted-foreground">
