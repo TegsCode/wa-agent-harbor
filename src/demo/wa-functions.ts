@@ -25,7 +25,16 @@ async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {}): Pro
   headers.set("accept", "application/json");
   if (init.body) headers.set("content-type", "application/json");
   if (b.key) headers.set("X-Api-Key", b.key);
-  const res = await fetch(`${b.url}${path}`, { ...init, headers, signal: AbortSignal.timeout(15000) });
+  let res: Response;
+  try {
+    res = await fetch(`${b.url}${path}`, { ...init, headers, signal: AbortSignal.timeout(15000) });
+  } catch (e) {
+    // Network failure, timeout or blocked tunnel — not a WAHA error.
+    // Thrown as a friendly message so the QR dialog can retry calmly.
+    throw new Error(
+      "Can't reach your bridge (Failed to fetch). Is Docker Desktop running and did you paste the CURRENT tunnel URL from `docker compose logs tunnel` in Settings → Bridge?"
+    );
+  }
   if (!res.ok) throw new Error(`Bridge responded ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const text = await res.text();
   try {
