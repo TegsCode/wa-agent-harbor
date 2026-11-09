@@ -51,8 +51,11 @@ export async function createAccount({ data }: Args<{ label: string }>) {
 }
 
 export async function getQr({ data }: Args<{ id: string }>) {
-  const account = loadAccount(data.id);
-  return { kind: "text" as const, value: `2@demo-${account.instance_name}-${Math.floor(Date.now() / 20000)},WAHUB` };
+  loadAccount(data.id);
+  // Static Pages build has no WAHA bridge, so no real pairing code exists.
+  // `demo` tells the UI to show a labelled placeholder (not a scannable fake QR,
+  // which WhatsApp would reject with "Invalid QR code").
+  return { kind: "demo" as const, value: "" };
 }
 
 export async function refreshStatus({ data }: Args<{ id: string }>) {

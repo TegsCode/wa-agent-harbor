@@ -52,14 +52,22 @@ export const getQr = createServerFn({ method: "POST" })
     const acc = await loadAccount(db, data.id);
     const bridge = await getBridge(db);
     if (acc.is_demo || !bridge) {
-      return { kind: "text" as const, value: `2@demo-${acc.instance_name}-${Math.floor(Date.now() / 20000)},WAHUB` };
+      // No live WAHA session exists, so there is no real WhatsApp pairing code to show.
+      // Return `demo` so the UI can show a non-scannable placeholder instead of a fake
+      // QR (a fake payload like `2@demo-…` is always rejected by WhatsApp as invalid).
+      return { kind: "demo" as const, value: "" };
     }
     const qr = (await bridgeFetch(bridge, `/api/${acc.instance_name}/auth/qr?format=image`)) as {
       mimetype?: string;
       data?: string;
+      qrcode?: string;
+      qr?: string;
     };
-    if (!qr?.data) throw new Error("QR not available yet — try again in a moment");
-    return { kind: "image" as const, value: `data:${qr.mimetype ?? "image/png"};base64,${qr.data}` };
+    // WAHA returns {mimetype, data} on newer versions, {qrcode: "data:…"} on older ones.
+    const raw = qr?.qrcode ?? qr?.qr ?? qr?.data;
+    if (!raw) throw new Error("QR not available yet — try again in a moment");
+    const value = raw.startsWith("data:") ? raw : `data:${qr?.mimetype ?? "image/png"};base64,${raw}`;
+    return { kind: "image" as const, value };
   });
 
 export const refreshStatus = createServerFn({ method: "POST" })

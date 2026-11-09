@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { QRCodeSVG } from "qrcode.react";
 import { Plus, QrCode, RefreshCw, RotateCcw, Smartphone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -115,8 +114,11 @@ function QrDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const scan = useServerFn(simulateScan);
   const { data: accounts = [] } = useAccounts();
   const acc = accounts.find((a) => a.id === id);
-  const [code, setCode] = useState<{ kind: "text" | "image"; value: string } | null>(null);
+  const isDemo = !!acc?.is_demo;
+  const [code, setCode] = useState<{ kind: string; value: string } | null>(null);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [fetchedAt, setFetchedAt] = useState(0);
 
   useEffect(() => {
     let stop = false;
@@ -125,28 +127,64 @@ function QrDialog({ id, onClose }: { id: string; onClose: () => void }) {
         const st = await refresh({ data: { id } });
         if (stop) return;
         if (st.status === "connected") { toast.success(`Paired ${st.label}`); onClose(); return; }
-        setCode(await qr({ data: { id } })); setErr("");
-      } catch (e) { setErr(e instanceof Error ? e.message : "QR unavailable"); }
+        const next = await qr({ data: { id } });
+        if (stop) return;
+        setCode(next); setFetchedAt(Date.now()); setErr(""); setLoading(false);
+      } catch (e) {
+        if (!stop) { setErr(e instanceof Error ? e.message : "QR unavailable"); setLoading(false); }
+      }
     };
     tick();
-    const t = setInterval(tick, 4000);
+    // WhatsApp pairing codes expire in ~20s, so refetch well inside that window.
+    // In demo mode there is no live code — poll status only.
+    const t = setInterval(tick, isDemo ? 5000 : 10000);
     return () => { stop = true; clearInterval(t); };
-  }, [id]);
+  }, [id, isDemo]);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Scan with WhatsApp</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">On your phone: WhatsApp → Settings → Linked Devices → Link a device.</p>
-        <div className="grid place-items-center rounded-xl bg-bubble-in p-6">
-          {code?.kind === "image" ? <img src={code.value} alt="WhatsApp QR code" className="size-64" /> : code ? <div className="rounded-lg bg-[#FFFFFF] p-3"><QRCodeSVG value={code.value} size={232} /></div> : <div className="size-64 animate-pulse rounded-lg bg-muted" />}
-        </div>
-        {err && <p className="text-sm text-destructive">{err}</p>}
-        <p className="text-center text-xs text-muted-foreground">Waiting for scan… status refreshes automatically.</p>
-        {acc?.is_demo && (
-          <Button variant="secondary" onClick={async () => { await scan({ data: { id } }); toast.success("Demo phone paired"); onClose(); }}>
-            Simulate phone scan (demo)
-          </Button>
+        <DialogHeader><DialogTitle>{isDemo ? "Demo pairing" : "Scan with WhatsApp"}</DialogTitle></DialogHeader>
+        {isDemo ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              This site is running in <b>demo mode</b> (no WhatsApp bridge connected). A real pairing code only
+              exists on a live bridge, so scanning this with your phone would show “Invalid QR code”.
+              Use the button below to simulate the scan instead.
+            </p>
+            <div className="grid place-items-center rounded-xl border-2 border-dashed bg-muted/40 p-6">
+              <div className="grid size-64 place-items-center text-center">
+                <div>
+                  <QrCode className="mx-auto size-12 text-muted-foreground" />
+                  <p className="mt-3 max-w-[220px] text-xs text-muted-foreground">
+                    Demo placeholder — not a scannable code.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={async () => { await scan({ data: { id } }); toast.success("Demo phone paired"); onClose(); }}
+            >
+              Simulate phone scan (demo)
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              To pair a real number, connect a bridge under Settings → Bridge, then create a new account.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">On your phone: WhatsApp → Settings → Linked Devices → Link a device.</p>
+            <div className="grid place-items-center rounded-xl bg-bubble-in p-6">
+              {code?.kind === "image" ? <img src={code.value} alt="WhatsApp QR code" className="size-64" /> : <div className="size-64 animate-pulse rounded-lg bg-muted" />}
+            </div>
+            {err && <p className="text-sm text-destructive">{err}</p>}
+            <p className="text-center text-xs text-muted-foreground">
+              {loading ? "Fetching QR code…" : `Waiting for scan… refreshes automatically (last updated ${new Date(fetchedAt).toLocaleTimeString()}).`}
+            </p>
+            <p className="text-center text-xs text-muted-foreground">QR expires in about 20 seconds — scan promptly, never use an old screenshot.</p>
+          </>
         )}
       </DialogContent>
     </Dialog>
