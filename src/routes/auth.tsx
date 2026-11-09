@@ -4,6 +4,7 @@ import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { DEMO_MODE } from "@/lib/demo-mode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,8 +30,8 @@ function friendly(msg: string) {
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(DEMO_MODE ? "demo@wa-agent-hub.app" : "");
+  const [password, setPassword] = useState(DEMO_MODE ? "demo1234" : "");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -104,6 +105,13 @@ function AuthPage() {
                 : "The first person to sign up becomes admin. Others need an invite."}
             </p>
           </div>
+          {DEMO_MODE && (
+            <div className="rounded-lg border border-primary/30 bg-accent p-3 text-xs leading-relaxed">
+              <b>Static demo.</b> Any email plus a password of 6+ characters signs you in — the fields are
+              pre-filled. Accounts, chats, keys and settings are stored in this browser only; no server, no
+              WhatsApp connection.
+            </div>
+          )}
           {sent ? (
             <div className="rounded-lg border bg-accent p-4 text-sm">
               Check <b>{email}</b> for a confirmation link, then come back to sign in.
