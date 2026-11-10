@@ -44,6 +44,23 @@ async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {}): Pro
   }
 }
 
+// Stale accounts (WAHA restarted, sessions wiped, or browser data from a
+// previous bridge) point at a session that no longer exists: WAHA replies
+// 422 'Session "…" does not exist'. Recreate it and retry — this heals old
+// cards instead of erroring forever.
+async function ensureSession(b: Bridge, name: string) {
+  try {
+    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify({ name, start: true }) });
+  } catch {
+    /* already exists / starting — the retried call will decide */
+  }
+}
+
+const isMissingSession = (e: unknown) => {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /does not exist|Session not found|404/i.test(msg);
+};
+
 const useBridge = (account: Row, b: Bridge | null): b is Bridge => !account.is_demo && !!b;
 
 const tsToIso = (ts: unknown) =>
@@ -105,22 +122,29 @@ export async function getQr({ data }: Args<{ id: string }>) {
   const account = loadAccount(data.id);
   const bridge = getBridge();
   if (useBridge(account, bridge)) {
+    const fetchQr = () => bridgeFetch(bridge, `/api/${account.instance_name}/auth/qr?format=image`);
     let qr: { mimetype?: string; data?: string; qrcode?: string; qr?: string };
     try {
-      qr = (await bridgeFetch(bridge, `/api/${account.instance_name}/auth/qr?format=image`)) as {
-        mimetype?: string;
-        data?: string;
-        qrcode?: string;
-        qr?: string;
-      };
+      qr = (await fetchQr()) as { mimetype?: string; data?: string; qrcode?: string; qr?: string };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // WAHA replies 422 "Session status is not as expected … STARTING, expected [SCAN_QR_CODE]"
-      // while the session is still booting. That is not a user error — ask to retry.
-      if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
-        throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+      if (isMissingSession(e)) {
+        await ensureSession(bridge, account.instance_name);
+        try {
+          qr = (await fetchQr()) as { mimetype?: string; data?: string; qrcode?: string; qr?: string };
+        } catch (e2) {
+          const msg = e2 instanceof Error ? e2.message : String(e2);
+          if (/not as expected|STARTING|SCAN_QR_CODE|does not exist/i.test(msg)) {
+            throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+          }
+          throw e2;
+        }
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
+          throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+        }
+        throw e;
       }
-      throw e;
     }
     const raw = (qr?.qrcode ?? qr?.qr ?? qr?.data) as string | undefined;
     if (!raw) throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
@@ -136,10 +160,20 @@ export async function refreshStatus({ data }: Args<{ id: string }>) {
   const account = loadAccount(data.id);
   const bridge = getBridge();
   if (!useBridge(account, bridge)) return account;
-  const s = (await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`)) as {
-    status?: string;
-    me?: { id?: string; pushName?: string };
-  };
+  let s: { status?: string; me?: { id?: string; pushName?: string } };
+  try {
+    s = (await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`)) as {
+      status?: string;
+      me?: { id?: string; pushName?: string };
+    };
+  } catch (e) {
+    if (!isMissingSession(e)) throw e;
+    await ensureSession(bridge, account.instance_name);
+    s = (await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`)) as {
+      status?: string;
+      me?: { id?: string; pushName?: string };
+    };
+  }
   const status = s?.status === "WORKING" ? "connected" : s?.status === "SCAN_QR_CODE" || s?.status === "STARTING" ? "pairing" : "disconnected";
   const phone = s?.me?.id ? String(s.me.id).split("@")[0] : account.phone_number;
   const [row] = updateRows("wa_accounts", { status, phone_number: phone }, [["id", account.id]]);
@@ -387,7 +421,10 @@ export async function testBridge({ data }: Args<{ url: string; key: string }>) {
     const v = (await bridgeFetch({ url, key }, "/api/server/version").catch(() =>
       bridgeFetch({ url, key }, "/api/sessions"),
     )) as { version?: string; engine?: string } | null;
-    const label = v && !Array.isArray(v) && (v as any).version ? `WAHA ${(v as any).version}` : (v as any)?.engine ?? "Bridge";
+    const label =
+      v && !Array.isArray(v) && (v as any).version
+        ? `WAHA ${(v as any).version}${(v as any).engine ? ` · ${(v as any).engine}` : ""}`
+        : (v as any)?.engine ?? "Bridge";
     return { ok: true, message: `Bridge responded in ${Date.now() - started}ms · ${label}` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Bridge unreachable" };

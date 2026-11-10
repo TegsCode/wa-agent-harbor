@@ -2,9 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   bridgeFetch,
+  ensureSession,
   getBridge,
   getGroupInfo,
   getMessages,
+  isMissingSession,
   listChats,
   markRead,
   newDemoPhone,
@@ -66,13 +68,29 @@ export const getQr = createServerFn({ method: "POST" })
         qr?: string;
       };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // WAHA replies 422 "Session status is not as expected … STARTING, expected [SCAN_QR_CODE]"
-      // while the session is still booting. That is not a user error — ask to retry.
-      if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
-        throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+      if (isMissingSession(e)) {
+        await ensureSession(bridge, acc.instance_name);
+        try {
+          qr = (await bridgeFetch(bridge, `/api/${acc.instance_name}/auth/qr?format=image`)) as {
+            mimetype?: string;
+            data?: string;
+            qrcode?: string;
+            qr?: string;
+          };
+        } catch (e2) {
+          const msg = e2 instanceof Error ? e2.message : String(e2);
+          if (/not as expected|STARTING|SCAN_QR_CODE|does not exist/i.test(msg)) {
+            throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+          }
+          throw e2;
+        }
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/not as expected|STARTING|SCAN_QR_CODE/i.test(msg)) {
+          throw new Error("WhatsApp is still starting up — retrying automatically, QR will appear in a few seconds.");
+        }
+        throw e;
       }
-      throw e;
     }
     // WAHA returns {mimetype, data} on newer versions, {qrcode: "data:…"} on older ones.
     const raw = qr?.qrcode ?? qr?.qr ?? qr?.data;
@@ -89,10 +107,20 @@ export const refreshStatus = createServerFn({ method: "POST" })
     const acc = await loadAccount(db, data.id);
     const bridge = await getBridge(db);
     if (acc.is_demo || !bridge) return acc;
-    const s = (await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}`)) as {
-      status?: string;
-      me?: { id?: string; pushName?: string };
-    };
+    let s: { status?: string; me?: { id?: string; pushName?: string } };
+    try {
+      s = (await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}`)) as {
+        status?: string;
+        me?: { id?: string; pushName?: string };
+      };
+    } catch (e) {
+      if (!isMissingSession(e)) throw e;
+      await ensureSession(bridge, acc.instance_name);
+      s = (await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}`)) as {
+        status?: string;
+        me?: { id?: string; pushName?: string };
+      };
+    }
     const status = s?.status === "WORKING" ? "connected" : s?.status === "SCAN_QR_CODE" || s?.status === "STARTING" ? "pairing" : "disconnected";
     const phone = s?.me?.id ? s.me.id.split("@")[0] : acc.phone_number;
     const { data: row } = await db
@@ -223,7 +251,11 @@ export const testBridge = createServerFn({ method: "POST" })
       const v = (await bridgeFetch({ url, key: data.key || null }, "/api/server/version").catch(() =>
         bridgeFetch({ url, key: data.key || null }, "/api/sessions"),
       )) as { version?: string; engine?: string } | null;
-      return { ok: true, message: `Bridge responded in ${Date.now() - started}ms${v && !Array.isArray(v) && v.version ? ` · WAHA ${v.version}` : ""}` };
+      const engine = v && !Array.isArray(v) && v.engine ? ` · ${v.engine}` : "";
+      return {
+        ok: true,
+        message: `Bridge responded in ${Date.now() - started}ms${v && !Array.isArray(v) && v.version ? ` · WAHA ${v.version}${engine}` : ""}`,
+      };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : "Bridge unreachable" };
     }

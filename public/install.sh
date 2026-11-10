@@ -11,14 +11,17 @@ fi
 cat > docker-compose.yml <<'YML'
 services:
   waha:
-    image: devlikeapro/waha
+    # Pinned: WAHA renamed the no-browser engine (NOWEBJS -> NOWEB in 2026.x).
+    # An unknown engine name silently falls back to WEBJS, which needs Chromium
+    # and leaves sessions stuck in STARTING on many machines.
+    image: devlikeapro/waha:2026.10.1
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       WAHA_API_KEY: ${WAHA_API_KEY}
       WHATSAPP_API_KEY: ${WAHA_API_KEY}
-      WHATSAPP_DEFAULT_ENGINE: WEBJS
+      WHATSAPP_DEFAULT_ENGINE: NOWEB
     volumes:
       - ./sessions:/app/.sessions
   tunnel:

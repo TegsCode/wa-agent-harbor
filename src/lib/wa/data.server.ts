@@ -44,7 +44,14 @@ export async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {
   headers.set("accept", "application/json");
   if (init.body) headers.set("content-type", "application/json");
   if (b.key) headers.set("X-Api-Key", b.key);
-  const res = await fetch(`${b.url}${path}`, { ...init, headers, signal: AbortSignal.timeout(15000) });
+  let res: Response;
+  try {
+    res = await fetch(`${b.url}${path}`, { ...init, headers, signal: AbortSignal.timeout(15000) });
+  } catch {
+    throw new Error(
+      "Can't reach your bridge (Failed to fetch). Is Docker Desktop running and did you paste the CURRENT tunnel URL from `docker compose logs tunnel` in Settings → Bridge?",
+    );
+  }
   if (!res.ok) throw new Error(`Bridge responded ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const text = await res.text();
   try {
@@ -52,6 +59,21 @@ export async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {
   } catch {
     return text;
   }
+}
+
+// Stale accounts (WAHA restarted, sessions wiped) point at a session that no
+// longer exists: WAHA replies 422 'Session "…" does not exist'. Recreate it.
+export async function ensureSession(b: Bridge, name: string) {
+  try {
+    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify({ name, start: true }) });
+  } catch {
+    /* already exists / starting — the retried call will decide */
+  }
+}
+
+export function isMissingSession(e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /does not exist|Session not found|404/i.test(msg);
 }
 
 const useBridge = (account: Account, bridge: Bridge | null): bridge is Bridge => !account.is_demo && !!bridge;
