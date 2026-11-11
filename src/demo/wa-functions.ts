@@ -6,6 +6,7 @@
 // so a real WhatsApp number can be paired from GitHub Pages.
 import { buildDemoSeed } from "@/lib/wa/demo";
 import { normalizeChatId } from "@/lib/agent/permissions";
+import { reviveSession, sessionConfigBody, sessionCreateBody } from "@/lib/wa/session-config";
 import { DEMO_USER, deleteRows, db, demoPhone, findRow, findRows, insertRow, timestamp, updateRows, type Row } from "./store";
 
 type Args<T> = { data: T };
@@ -49,11 +50,20 @@ async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {}): Pro
 // 422 'Session "…" does not exist'. Recreate it and retry — this heals old
 // cards instead of erroring forever.
 async function ensureSession(b: Bridge, name: string) {
+  // Existing sessions may predate the NOWEB store config — PUT is a no-op then
+  // aside from storing config, and 404s harmlessly when the session is gone.
+  await bridgeFetch(b, `/api/sessions/${name}`, {
+    method: "PUT",
+    body: JSON.stringify(sessionConfigBody()),
+  }).catch(() => null);
   try {
-    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify({ name, start: true }) });
+    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify(sessionCreateBody(name)) });
   } catch {
     /* already exists / starting — the retried call will decide */
   }
+  // A session left FAILED by a crash claims to be "already running", so the POST
+  // above is a no-op; only stop->start clears that state.
+  await reviveSession(name, (p, init) => bridgeFetch(b, p, init));
 }
 
 const isMissingSession = (e: unknown) => {
@@ -103,7 +113,9 @@ export async function createAccount({ data }: Args<{ label: string }>) {
   if (bridge) {
     try {
       // No-op if the session already exists — WAHA ignores duplicates gracefully.
-      await bridgeFetch(bridge, "/api/sessions", { method: "POST", body: JSON.stringify({ name: instance, start: true }) }).catch(() => null);
+      await bridgeFetch(bridge, "/api/sessions", { method: "POST", body: JSON.stringify(sessionCreateBody(instance)) }).catch(
+        () => null,
+      );
     } catch {
       /* best effort; status polling will surface real errors */
     }
@@ -160,19 +172,23 @@ export async function refreshStatus({ data }: Args<{ id: string }>) {
   const account = loadAccount(data.id);
   const bridge = getBridge();
   if (!useBridge(account, bridge)) return account;
-  let s: { status?: string; me?: { id?: string; pushName?: string } };
-  try {
-    s = (await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`)) as {
+  const read = () =>
+    bridgeFetch(bridge, `/api/sessions/${account.instance_name}`) as Promise<{
       status?: string;
       me?: { id?: string; pushName?: string };
-    };
+    }>;
+  let s: { status?: string; me?: { id?: string; pushName?: string } };
+  try {
+    s = await read();
   } catch (e) {
     if (!isMissingSession(e)) throw e;
     await ensureSession(bridge, account.instance_name);
-    s = (await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`)) as {
-      status?: string;
-      me?: { id?: string; pushName?: string };
-    };
+    s = await read();
+  }
+  // Heal a crashed engine (WAHA says FAILED but claims "already running").
+  if (s?.status === "FAILED") {
+    await reviveSession(account.instance_name, (p, init) => bridgeFetch(bridge, p, init));
+    s = (await read().catch(() => null)) ?? {};
   }
   const status = s?.status === "WORKING" ? "connected" : s?.status === "SCAN_QR_CODE" || s?.status === "STARTING" ? "pairing" : "disconnected";
   const phone = s?.me?.id ? String(s.me.id).split("@")[0] : account.phone_number;
@@ -195,9 +211,20 @@ export async function reconnectAccount({ data }: Args<{ id: string }>) {
   const account = loadAccount(data.id);
   const bridge = getBridge();
   if (useBridge(account, bridge)) {
-    await bridgeFetch(bridge, `/api/sessions/${account.instance_name}/restart`, { method: "POST" }).catch(() =>
-      bridgeFetch(bridge, "/api/sessions", { method: "POST", body: JSON.stringify({ name: account.instance_name, start: true }) }),
-    );
+    await bridgeFetch(bridge, `/api/sessions/${account.instance_name}`, {
+      method: "PUT",
+      body: JSON.stringify(sessionConfigBody()),
+    }).catch(() => null);
+    // POST /restart is a no-op on a FAILED session ("already running"), so use
+    // the stop->start repair, then fall back to creating the session.
+    const { revived } = await reviveSession(account.instance_name, (p, init) => bridgeFetch(bridge, p, init)).catch(() => ({
+      revived: false,
+    }));
+    if (!revived) {
+      await bridgeFetch(bridge, `/api/sessions/${account.instance_name}/restart`, { method: "POST" }).catch(() =>
+        bridgeFetch(bridge, "/api/sessions", { method: "POST", body: JSON.stringify(sessionCreateBody(account.instance_name)) }),
+      );
+    }
   }
   updateRows("wa_accounts", { status: "pairing" }, [["id", data.id]]);
   return { ok: true };
@@ -357,7 +384,23 @@ export async function fetchGroupInfo({ data }: Args<{ accountId: string; jid: st
   const jid = normalizeChatId(data.jid);
   const bridge = getBridge();
   if (useBridge(account, bridge)) {
-    const g = (await bridgeFetch(bridge, `/api/${account.instance_name}/groups/${encodeURIComponent(jid)}`)) as any;
+    let g: any;
+    try {
+      g = await bridgeFetch(bridge, `/api/${account.instance_name}/groups/${encodeURIComponent(jid)}`);
+    } catch (e) {
+      // WAHA answers 500 'Group with id … not found' for groups it has not
+      // synced yet. Degrade to an explanation instead of breaking the page.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/not found|not exist|404|500/i.test(msg)) throw e;
+      return {
+        jid,
+        name: jid.split("@")[0] ?? jid,
+        description: null,
+        participants: [] as { id: string; name: string; admin: boolean }[],
+        unavailable:
+          "WhatsApp hasn't sent this group's details to the bridge yet. Open the group on your phone so it re-syncs, then refresh.",
+      };
+    }
     if (!g) return null;
     const gid = typeof g.id === "string" ? g.id : (g.id?._serialized ?? g.JID ?? "");
     const parts: any[] = g.participants ?? g.groupMetadata?.participants ?? g.Participants ?? [];

@@ -79,7 +79,14 @@ function ChatsPage() {
               </span>
             </button>
           ))}
-          {accountId && list.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No conversations. Pair the account first.</p>}
+          {chats.isError && (
+            <p className="border-b p-3 text-xs text-muted-foreground">
+              Couldn't load chats — the bridge is reconnecting. Retrying automatically…
+            </p>
+          )}
+          {accountId && list.length === 0 && !chats.isError && (
+            <p className="p-6 text-center text-sm text-muted-foreground">No conversations. Pair the account first.</p>
+          )}
         </div>
       </aside>
       <section className="flex min-w-0 flex-1 flex-col bg-muted">
@@ -89,6 +96,11 @@ function ChatsPage() {
           <>
             <div className="border-b bg-card px-4 py-3 font-bold">{chat.name} <span className="font-mono text-xs font-normal text-muted-foreground">{chat.id}</span></div>
             <div className="flex-1 space-y-2 overflow-y-auto p-4">
+              {msgs.isError && (
+                <p className="text-center text-sm text-muted-foreground">
+                  History didn't load for this chat. WhatsApp may still be syncing it — it retries every few seconds.
+                </p>
+              )}
               {(msgs.data ?? []).map((m) => (
                 <div key={m.id} className={cn("max-w-[70%] rounded-xl px-3 py-2 text-sm shadow-sm", m.fromMe ? "ml-auto bg-bubble-out" : "bg-bubble-in")}>
                   {!m.fromMe && chat.isGroup && <div className="text-xs font-bold text-primary">{m.author}</div>}
@@ -109,11 +121,23 @@ function ChatsPage() {
           <h3 className="mb-3 font-bold">{chat.isGroup ? "Group info" : "Contact"}</h3>
           {chat.isGroup ? (
             <div className="space-y-3 text-sm">
-              <p className="text-muted-foreground">{group.data?.description}</p>
-              <p className="font-semibold">{group.data?.participants.length ?? 0} participants</p>
-              {group.data?.participants.map((p) => (
-                <div key={p.id} className="flex justify-between"><span>{p.name}</span>{p.admin && <Badge variant="outline">admin</Badge>}</div>
-              ))}
+              {group.isPending ? (
+                <p className="text-muted-foreground">Loading group details…</p>
+              ) : group.isError ? (
+                <p className="text-muted-foreground">
+                  Group details didn't load. Refresh in a moment — the bridge is still syncing this group.
+                </p>
+              ) : group.data?.unavailable ? (
+                <p className="text-muted-foreground">{group.data.unavailable}</p>
+              ) : (
+                <>
+                  <p className="text-muted-foreground">{group.data?.description || "No description."}</p>
+                  <p className="font-semibold">{group.data?.participants.length ?? 0} participants</p>
+                  {group.data?.participants.map((p) => (
+                    <div key={p.id} className="flex justify-between"><span>{p.name}</span>{p.admin && <Badge variant="outline">admin</Badge>}</div>
+                  ))}
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-2 text-sm">

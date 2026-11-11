@@ -17,8 +17,8 @@ export function SetupInstructions() {
     <div className="space-y-6">
       <Step n={1} title="Run the bridge on this computer">
         <p className="mb-3 text-sm text-muted-foreground">
-          Requires Docker. Starts WAHA (WhatsApp bridge) plus a Cloudflare Tunnel that gives it a public HTTPS URL.
-          Open a terminal and paste the one-liner for your OS.
+          Requires Docker. Starts WAHA (WhatsApp bridge) plus a Tailscale Funnel that gives it a permanent public
+          HTTPS URL. Open a terminal and paste the one-liner for your OS.
         </p>
         <Tabs defaultValue={isWin ? "win" : "unix"}>
           <TabsList>
@@ -35,16 +35,17 @@ export function SetupInstructions() {
           <TabsContent value="compose">
             <p className="mb-2 text-xs text-muted-foreground">
               Save as docker-compose.yml, create a .env with WAHA_API_KEY=your-secret, then run{" "}
-              <code className="font-mono">docker compose up -d</code> and{" "}
-              <code className="font-mono">docker compose logs tunnel</code> to find the URL.
+              <code className="font-mono">docker compose up -d</code>. Expose it with{" "}
+              <code className="font-mono">tailscale funnel --bg 3000</code> — that URL stays the same forever.
             </p>
             <CopyBlock code={COMPOSE_YML} />
           </TabsContent>
         </Tabs>
       </Step>
-      <Step n={2} title="Paste the tunnel URL and API key">
+      <Step n={2} title="Paste the bridge URL and API key">
         <p className="mb-3 text-sm text-muted-foreground">
-          The script prints a <code className="font-mono">https://…trycloudflare.com</code> URL and the API key.
+          The script prints a <code className="font-mono">https://…ts.net</code> URL and the API key. That URL is
+          permanent, so you only paste it once.
         </p>
         <BridgeForm />
       </Step>

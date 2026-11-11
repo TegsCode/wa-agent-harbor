@@ -53,7 +53,7 @@ export function BridgeForm() {
         <div className="space-y-1.5">
           <Label>Bridge URL</Label>
           <Input
-            placeholder="https://your-tunnel.trycloudflare.com"
+            placeholder="https://your-pc.your-tailnet.ts.net"
             value={url}
             disabled={!canEdit}
             onChange={(e) => setUrl(e.target.value)}

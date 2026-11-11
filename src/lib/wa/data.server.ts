@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { normalizeChatId } from "@/lib/agent/permissions";
 import { buildDemoSeed, demoPhone } from "./demo";
+import { sessionConfigBody, sessionCreateBody, reviveSession } from "./session-config";
 
 export type DB = SupabaseClient<Database>;
 export type Account = Database["public"]["Tables"]["wa_accounts"]["Row"];
@@ -31,6 +32,11 @@ export interface GroupInfo {
   name: string;
   description: string | null;
   participants: { id: string; name: string; admin: boolean }[];
+  /**
+   * Set when WhatsApp could not supply the metadata (e.g. the group is not in
+   * the NOWEB store yet). The UI shows this instead of an error screen.
+   */
+  unavailable?: string;
 }
 
 export async function getBridge(db: DB): Promise<Bridge | null> {
@@ -64,11 +70,20 @@ export async function bridgeFetch(b: Bridge, path: string, init: RequestInit = {
 // Stale accounts (WAHA restarted, sessions wiped) point at a session that no
 // longer exists: WAHA replies 422 'Session "…" does not exist'. Recreate it.
 export async function ensureSession(b: Bridge, name: string) {
+  // Existing sessions may predate the NOWEB store config — PUT stores it, and
+  // 404s harmlessly when the session is gone.
+  await bridgeFetch(b, `/api/sessions/${name}`, {
+    method: "PUT",
+    body: JSON.stringify(sessionConfigBody()),
+  }).catch(() => null);
   try {
-    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify({ name, start: true }) });
+    await bridgeFetch(b, "/api/sessions", { method: "POST", body: JSON.stringify(sessionCreateBody(name)) });
   } catch {
     /* already exists / starting — the retried call will decide */
   }
+  // A session left FAILED by a crash claims to be "already running", so the POST
+  // above is a no-op; only stop->start clears that state.
+  await reviveSession(name, (p, init) => bridgeFetch(b, p, init));
 }
 
 export function isMissingSession(e: unknown) {
@@ -247,8 +262,25 @@ export async function getGroupInfo(db: DB, account: Account, jid: string): Promi
   const id = normalizeChatId(jid);
   const bridge = await getBridge(db);
   if (useBridge(account, bridge)) {
-    const g = await bridgeFetch(bridge, `/api/${account.instance_name}/groups/${encodeURIComponent(id)}`);
-    return g ? mapBridgeGroup(g) : null;
+    try {
+      const g = await bridgeFetch(bridge, `/api/${account.instance_name}/groups/${encodeURIComponent(id)}`);
+      return g ? mapBridgeGroup(g) : null;
+    } catch (e) {
+      // WAHA answers 500 'Group with id … not found' for groups it has not
+      // synced yet (a history sync can take a while, and some groups never
+      // sync). That is not an error the user can act on, so degrade: send the
+      // group back with its metadata marked unavailable.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/not found|not exist|404|500/i.test(msg)) throw e;
+      return {
+        jid: id,
+        name: id.split("@")[0] ?? id,
+        description: null,
+        participants: [],
+        unavailable:
+          "WhatsApp hasn't sent this group's details to the bridge yet. Open the group on your phone so it re-syncs, then refresh.",
+      };
+    }
   }
   return (await listGroups(db, account)).find((g) => g.jid === id) ?? null;
 }

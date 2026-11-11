@@ -14,6 +14,7 @@ import {
   sendMessage,
   type DB,
 } from "./data.server";
+import { reviveSession, sessionConfigBody, sessionCreateBody } from "./session-config";
 
 async function loadAccount(db: DB, id: string) {
   const { data, error } = await db.from("wa_accounts").select("*").eq("id", id).single();
@@ -34,7 +35,7 @@ export const createAccount = createServerFn({ method: "POST" })
     if (bridge) {
       await bridgeFetch(bridge, "/api/sessions", {
         method: "POST",
-        body: JSON.stringify({ name: instance, start: true }),
+        body: JSON.stringify(sessionCreateBody(instance)),
       });
     }
     const { data: row, error } = await db
@@ -121,6 +122,16 @@ export const refreshStatus = createServerFn({ method: "POST" })
         me?: { id?: string; pushName?: string };
       };
     }
+    // A crashed engine leaves the session FAILED while WAHA still answers
+    // "already running"; only stop->start fixes it. Do it on refresh so the
+    // Accounts page and the QR dialog heal themselves.
+    if (s?.status === "FAILED") {
+      await reviveSession(acc.instance_name, (p, init) => bridgeFetch(bridge, p, init));
+      s = (await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}`).catch(() => null)) as {
+        status?: string;
+        me?: { id?: string; pushName?: string };
+      } | null;
+    }
     const status = s?.status === "WORKING" ? "connected" : s?.status === "SCAN_QR_CODE" || s?.status === "STARTING" ? "pairing" : "disconnected";
     const phone = s?.me?.id ? s.me.id.split("@")[0] : acc.phone_number;
     const { data: row } = await db
@@ -158,8 +169,14 @@ export const reconnectAccount = createServerFn({ method: "POST" })
     const acc = await loadAccount(db, data.id);
     const bridge = await getBridge(db);
     if (!acc.is_demo && bridge) {
+      // Re-apply config first: sessions paired before the NOWEB store existed
+      // would otherwise keep failing chat/contact imports.
+      await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}`, {
+        method: "PUT",
+        body: JSON.stringify(sessionConfigBody()),
+      }).catch(() => null);
       await bridgeFetch(bridge, `/api/sessions/${acc.instance_name}/restart`, { method: "POST" }).catch(() =>
-        bridgeFetch(bridge, `/api/sessions`, { method: "POST", body: JSON.stringify({ name: acc.instance_name, start: true }) }),
+        bridgeFetch(bridge, "/api/sessions", { method: "POST", body: JSON.stringify(sessionCreateBody(acc.instance_name)) }),
       );
     }
     await db.from("wa_accounts").update({ status: "pairing" }).eq("id", acc.id);
